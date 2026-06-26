@@ -15,7 +15,7 @@ The app helps business users visually plan CRM automations, document bilingual c
 - Collapsible Step Spec panel.
 - Canvas horizontal scrolling and automatic resize when the Step Spec panel is collapsed or expanded.
 - Browser `localStorage` autosave.
-- `Export JSON`, `Copy spec`, and `Print / PDF`.
+- `Import JSON`, `Export JSON`, `Copy spec`, and `Print / PDF`.
 - Starter workflow restore and backup JSON.
 
 ## Quick Start
@@ -67,6 +67,7 @@ No build step is required.
 - Use preset actions to add automation steps.
 - Use `+ Branch` to add a condition with yes/no paths.
 - Use `Export JSON` for a developer-readable structured handoff.
+- Use `Import JSON` to load a workflow that someone else exported, or to restore one of your own backups.
 - Use `Print / PDF` and choose `Save as PDF` from the browser print dialog.
 - Use `Restore starter template` to revert the autosaved browser diagram back to the original workflow.
 - Use `Collapse` in the Step Spec panel to hide the right-side fields while working on the diagram.
@@ -95,7 +96,9 @@ The current starter workflow is `CS Pipeline - Reglas Generales`. It captures:
 
 The app stores saved drafts in browser `localStorage`.
 
-That means saved automations are local to the browser and device. Use `Export JSON` to back up a workflow, share it with developers, or move it between browsers.
+That means saved automations are local to the browser and device. Other people will not automatically see your saved changes just because they open the same GitHub Pages link.
+
+Use `Export JSON` to back up or share a workflow. Use `Import JSON` on another browser/device to load that exported workflow into that person's local planner.
 
 The current starter workflow is also saved as `original-starter-template.json`.
 

@@ -572,8 +572,10 @@ function renderTopbar() {
         <button class="primary-action-button" data-action="save-automation">Save automation</button>
         <button class="warning-button" data-action="restore-template">Restore starter template</button>
         <button class="secondary-button" data-action="copy-spec">Copy spec</button>
+        <button class="secondary-button" data-action="import-json">Import JSON</button>
         <button class="secondary-button" data-action="export-json">Export JSON</button>
         <button class="secondary-button" data-action="print-pdf">Print / PDF</button>
+        <input class="visually-hidden" type="file" accept="application/json,.json" data-import-json-input />
       </div>
     </header>
   `;
@@ -893,6 +895,10 @@ function bindEvents() {
     button.addEventListener("click", () => handleAction(button.dataset.action));
   });
 
+  document.querySelectorAll("[data-import-json-input]").forEach((input) => {
+    input.addEventListener("change", () => importJsonFile(input));
+  });
+
   document.querySelectorAll("[data-rule-mode]").forEach((button) => {
     button.addEventListener("click", () => {
       const node = selectedNode();
@@ -979,6 +985,7 @@ function handleAction(action) {
   if (action === "restore-template") restoreTemplate();
   if (action === "add-branch") addBranch();
   if (action === "delete-node") deleteNode();
+  if (action === "import-json") document.querySelector("[data-import-json-input]")?.click();
   if (action === "export-json") exportJson();
   if (action === "print-pdf") window.print();
   if (action === "copy-spec") copySpec();
@@ -1333,6 +1340,99 @@ function exportJson() {
   link.download = `${slugify(state.title)}.automation.json`;
   link.click();
   URL.revokeObjectURL(link.href);
+}
+
+async function importJsonFile(input) {
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+
+  try {
+    const raw = await file.text();
+    const parsed = JSON.parse(raw);
+    const importedWorkflows = extractImportedWorkflows(parsed);
+    if (!importedWorkflows.length) {
+      alert("No valid automation workflows were found in that JSON file.");
+      return;
+    }
+
+    const timestamp = Date.now();
+    const normalizedWorkflows = importedWorkflows.map((workflow, index) => normalizeImportedWorkflow(workflow, timestamp, index));
+    appState.workflows.push(...normalizedWorkflows);
+
+    const activeImport = normalizedWorkflows[0];
+    appState.activeCategory = activeImport.category;
+    appState.activeWorkflowId = activeImport.id;
+    state = activeImport;
+    selectedNodeId = activeImport.nodes[0]?.id || null;
+    saveState();
+    render();
+    alert(`Imported ${normalizedWorkflows.length} automation${normalizedWorkflows.length === 1 ? "" : "s"}.`);
+  } catch (error) {
+    console.error("Import failed", error);
+    alert("That JSON file could not be imported. Please choose a valid exported automation JSON file.");
+  }
+}
+
+function extractImportedWorkflows(parsed) {
+  if (Array.isArray(parsed?.workflows)) return parsed.workflows.filter(isWorkflowLike);
+  if (isWorkflowLike(parsed)) return [parsed];
+  return [];
+}
+
+function isWorkflowLike(value) {
+  return Boolean(value && typeof value === "object" && Array.isArray(value.nodes) && Array.isArray(value.edges));
+}
+
+function normalizeImportedWorkflow(workflow, timestamp, index) {
+  const imported = clone(workflow);
+  imported.id = makeUniqueWorkflowId(imported.id || "imported-workflow", timestamp, index);
+  imported.folder = imported.folder || folderFromCategory(imported.category || appState.activeCategory);
+  imported.category = imported.category || appState.activeCategory || automationFolders[0].category;
+  imported.title = imported.title || `Imported automation ${index + 1}`;
+  imported.owner = imported.owner || "Imported";
+  imported.status = "Saved";
+  imported.saved = true;
+  imported.savedAt = new Date().toISOString();
+  imported.updatedAt = imported.savedAt;
+  imported.objective = imported.objective || "Imported automation workflow.";
+  imported.nodes = imported.nodes.map((node, nodeIndex) => ({
+    id: node.id || `N${nodeIndex + 1}`,
+    type: node.type || actionTypes.find((action) => action.key === node.actionKey)?.nodeType || "action",
+    actionKey: node.actionKey || "update_field",
+    labelEs: node.labelEs || `Paso ${nodeIndex + 1}`,
+    backendName: node.backendName || `imported_step_${nodeIndex + 1}`,
+    summary: node.summary || "",
+    criteria: node.criteria || "",
+    fieldsUpdated: node.fieldsUpdated || "",
+    ownerRule: node.ownerRule || "",
+    sla: node.sla || "",
+    notification: node.notification || "",
+    developerNotes: node.developerNotes || "",
+    ruleBuilder: node.ruleBuilder,
+    x: Number.isFinite(node.x) ? node.x : 120 + nodeIndex * 40,
+    y: Number.isFinite(node.y) ? node.y : 120 + nodeIndex * 130,
+  }));
+  imported.edges = imported.edges
+    .filter((edge) => edge?.from && edge?.to)
+    .map((edge) => ({ from: edge.from, to: edge.to, label: edge.label || "" }));
+  return imported;
+}
+
+function makeUniqueWorkflowId(baseId, timestamp, index) {
+  const safeBase = slugify(baseId) || "imported-workflow";
+  let id = `${safeBase}-imported-${timestamp}${index ? `-${index + 1}` : ""}`;
+  let suffix = 2;
+  while (appState.workflows.some((workflow) => workflow.id === id)) {
+    id = `${safeBase}-imported-${timestamp}-${suffix}`;
+    suffix += 1;
+  }
+  return id;
+}
+
+function folderFromCategory(category) {
+  if (category?.includes("Pipeline") || category?.includes("Caso") || category?.includes("SLA")) return "Servicio al Cliente";
+  return category || "Imported";
 }
 
 async function copySpec() {

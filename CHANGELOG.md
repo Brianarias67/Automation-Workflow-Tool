@@ -7,5 +7,5 @@
 - Added draggable workflow canvas and collapsible step inspector.
 - Added guided rule builder for field and time-elapsed criteria.
 - Added SLA presets for Immediate, 24 hours, 48 hours, and 72 hours.
-- Added JSON export, print/PDF support, and starter-template recovery.
+- Added JSON import/export, print/PDF support, and starter-template recovery.
 - Added GitHub-ready repository metadata and GitHub Pages workflow.
