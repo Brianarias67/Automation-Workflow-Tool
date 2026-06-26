@@ -7,7 +7,7 @@ The app helps business users visually plan CRM automations, document bilingual c
 ## Features
 
 - Folder-based automation organization.
-- Figma-style workflow canvas with draggable nodes.
+- Workflow canvas with draggable nodes.
 - Preset actions: trigger, condition, assign owner, move stage, create task, notify, wait, update field, webhook, and close ticket.
 - Guided rule builder for common `IF field equals value` and `IF time elapsed >= X` criteria.
 - SLA presets for `Immediate`, `24 hours`, `48 hours`, and `72 hours`.
