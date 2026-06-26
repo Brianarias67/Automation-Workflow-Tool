@@ -791,8 +791,8 @@ function selectInput(label, key, value) {
 
 function renderRuleBuilder(node) {
   const builder = getRuleBuilder(node);
-  const valueOptions = fieldValuePresets[builder.field] || [];
   const isTimeRule = builder.mode === "time";
+  const conditionBuilder = renderConditionBuilder(builder, isTimeRule);
   return `
     <div class="rule-builder">
       <div class="rule-builder-header">
@@ -808,11 +808,7 @@ function renderRuleBuilder(node) {
         <button class="${builder.mode === "time" ? "active" : ""}" data-rule-mode="time">Time elapsed</button>
       </div>
 
-      <div class="rule-grid ${isTimeRule ? "is-hidden" : ""}">
-        ${miniSelect("IF field", "field", builder.field, crmFields)}
-        ${miniSelect("Operator", "operator", builder.operator, ruleOperators)}
-        ${valueOptions.length ? miniSelect("Value", "value", builder.value, valueOptions) : miniInput("Value", "value", builder.value)}
-      </div>
+      ${isTimeRule ? "" : conditionBuilder}
 
       <div class="rule-grid ${isTimeRule ? "" : "is-hidden"}">
         ${miniSelect("IF time", "timeBasis", builder.timeBasis, timeBasisPresets)}
@@ -821,12 +817,52 @@ function renderRuleBuilder(node) {
         ${miniSelect("Closure guard", "guard", builder.guard, ["not closed", "any status"])}
       </div>
 
+      ${isTimeRule ? conditionBuilder : ""}
+
       <div class="preset-row">
         <button class="ghost-chip" data-rule-template="stage-escalated">Stage = Escalado</button>
         <button class="ghost-chip" data-rule-template="type-return">Type = Devolucion</button>
         <button class="ghost-chip" data-rule-template="time-24-client">Client wait > 24h</button>
         <button class="ghost-chip" data-rule-template="time-48-escalated">Escalated > 48h</button>
       </div>
+    </div>
+  `;
+}
+
+function renderConditionBuilder(builder, isTimeRule) {
+  return `
+    <div class="condition-builder">
+      ${miniSelect(isTimeRule ? "Guard conditions" : "Match conditions", "match", builder.match, [
+        { value: "all", label: "ALL / AND" },
+        { value: "any", label: "ANY / OR" },
+      ])}
+      <p class="condition-builder-note">
+        ${isTimeRule ? "Only run after the timer if these field conditions are still true." : "Run when these field conditions match."}
+      </p>
+      <div class="condition-chip-list">
+        ${builder.conditions.map((condition, index) => renderConditionChip(condition, index, builder.match)).join("")}
+      </div>
+      <button class="secondary-button full-width-button" data-rule-add-condition>+ Add condition</button>
+    </div>
+  `;
+}
+
+function renderConditionChip(condition, index, match) {
+  const valueOptions = fieldValuePresets[condition.field] || [];
+  const prefix = index === 0 ? "IF" : match === "any" ? "OR" : "AND";
+  return `
+    <div class="condition-chip">
+      <div class="condition-chip-prefix">${prefix}</div>
+      <div class="condition-chip-fields">
+        ${conditionSelect(index, "field", condition.field, crmFields)}
+        ${conditionSelect(index, "operator", condition.operator, ruleOperators)}
+        ${
+          valueOptions.length
+            ? conditionSelect(index, "value", condition.value, valueOptions)
+            : conditionInput(index, "value", condition.value)
+        }
+      </div>
+      <button class="condition-remove" title="Remove condition" data-rule-remove-condition="${index}" ${index === 0 ? "disabled" : ""}>&times;</button>
     </div>
   `;
 }
@@ -840,6 +876,26 @@ function renderSlaPreset(node) {
         ${slaPresets.map((preset) => `<option value="${escapeAttr(preset)}" ${node.sla === preset ? "selected" : ""}>${escapeHtml(preset)}</option>`).join("")}
       </select>
     </div>
+  `;
+}
+
+function conditionSelect(index, key, value, options) {
+  return `
+    <select data-rule-condition="${index}" data-rule-condition-field="${key}" aria-label="${escapeAttr(key)}">
+      ${options
+        .map((option) => {
+          const optionValue = typeof option === "string" ? option : option.value;
+          const optionLabel = typeof option === "string" ? option : option.label;
+          return `<option value="${escapeAttr(optionValue)}" ${optionValue === value ? "selected" : ""}>${escapeHtml(optionLabel)}</option>`;
+        })
+        .join("")}
+    </select>
+  `;
+}
+
+function conditionInput(index, key, value) {
+  return `
+    <input value="${escapeAttr(value)}" data-rule-condition="${index}" data-rule-condition-field="${key}" aria-label="${escapeAttr(key)}" />
   `;
 }
 
@@ -919,6 +975,19 @@ function bindEvents() {
       saveState();
       render();
     });
+  });
+
+  document.querySelectorAll("[data-rule-condition-field]").forEach((field) => {
+    field.addEventListener("input", () => updateRuleCondition(field));
+    field.addEventListener("change", () => updateRuleCondition(field));
+  });
+
+  document.querySelectorAll("[data-rule-add-condition]").forEach((button) => {
+    button.addEventListener("click", () => addRuleCondition());
+  });
+
+  document.querySelectorAll("[data-rule-remove-condition]").forEach((button) => {
+    button.addEventListener("click", () => removeRuleCondition(Number(button.dataset.ruleRemoveCondition)));
   });
 
   document.querySelectorAll("[data-rule-template]").forEach((button) => {
@@ -1030,11 +1099,20 @@ function toggleInspector() {
 }
 
 function getRuleBuilder(node) {
-  return {
-    mode: node.ruleBuilder?.mode || "field",
+  const legacyCondition = {
     field: node.ruleBuilder?.field || "Etapa",
     operator: node.ruleBuilder?.operator || "changes to",
     value: node.ruleBuilder?.value || "Escalado / En Revision",
+  };
+  const conditions = normalizeRuleConditions(node.ruleBuilder?.conditions || [legacyCondition]);
+  const primaryCondition = conditions[0];
+  return {
+    mode: node.ruleBuilder?.mode || "field",
+    match: node.ruleBuilder?.match || "all",
+    conditions,
+    field: primaryCondition.field,
+    operator: primaryCondition.operator,
+    value: primaryCondition.value,
     timeBasis: node.ruleBuilder?.timeBasis || "time in current stage",
     elapsed: node.ruleBuilder?.elapsed || "24 hours",
     stage: node.ruleBuilder?.stage || "Escalado / En Revision",
@@ -1042,10 +1120,90 @@ function getRuleBuilder(node) {
   };
 }
 
+function normalizeRuleConditions(conditions) {
+  const normalized = conditions
+    .filter((condition) => condition && typeof condition === "object")
+    .map((condition) => {
+      const field = crmFields.includes(condition.field) ? condition.field : "Etapa";
+      const operator = ruleOperators.some((item) => item.value === condition.operator) ? condition.operator : "=";
+      const valueOptions = fieldValuePresets[field] || [];
+      const fallbackValue = valueOptions[0] || "";
+      return {
+        field,
+        operator,
+        value: condition.value || fallbackValue,
+      };
+    });
+
+  return normalized.length ? normalized : [{ field: "Etapa", operator: "changes to", value: "Escalado / En Revision" }];
+}
+
+function updateRuleCondition(field) {
+  const node = selectedNode();
+  if (!node) return;
+
+  const builder = getRuleBuilder(node);
+  const index = Number(field.dataset.ruleCondition);
+  const key = field.dataset.ruleConditionField;
+  const conditions = builder.conditions.map((condition) => ({ ...condition }));
+  const nextCondition = { ...conditions[index], [key]: field.value };
+
+  if (key === "field") {
+    const valueOptions = fieldValuePresets[field.value] || [];
+    nextCondition.value = valueOptions[0] || "";
+    nextCondition.operator = nextCondition.operator || "=";
+  }
+
+  conditions[index] = nextCondition;
+  node.ruleBuilder = { ...builder, conditions };
+  syncLegacyRuleFields(node.ruleBuilder);
+  markUnsaved();
+  saveState();
+  render();
+}
+
+function addRuleCondition() {
+  const node = selectedNode();
+  if (!node) return;
+
+  const builder = getRuleBuilder(node);
+  const nextCondition = { field: "Prioridad", operator: "=", value: "High" };
+  node.ruleBuilder = { ...builder, conditions: [...builder.conditions, nextCondition] };
+  syncLegacyRuleFields(node.ruleBuilder);
+  markUnsaved();
+  saveState();
+  render();
+}
+
+function removeRuleCondition(index) {
+  const node = selectedNode();
+  if (!node) return;
+
+  const builder = getRuleBuilder(node);
+  if (builder.conditions.length <= 1) return;
+  node.ruleBuilder = {
+    ...builder,
+    conditions: builder.conditions.filter((condition, conditionIndex) => conditionIndex !== index),
+  };
+  syncLegacyRuleFields(node.ruleBuilder);
+  markUnsaved();
+  saveState();
+  render();
+}
+
+function syncLegacyRuleFields(builder) {
+  const primaryCondition = builder.conditions?.[0];
+  if (!primaryCondition) return;
+  builder.field = primaryCondition.field;
+  builder.operator = primaryCondition.operator;
+  builder.value = primaryCondition.value;
+}
+
 function applyRuleBuilder() {
   const node = selectedNode();
   if (!node) return;
   node.ruleBuilder = getRuleBuilder(node);
+  syncLegacyRuleFields(node.ruleBuilder);
   node.criteria = buildCriteriaFromRule(node.ruleBuilder);
   if (node.ruleBuilder.mode === "time") {
     node.sla = `After ${node.ruleBuilder.elapsed}`;
@@ -1057,15 +1215,31 @@ function applyRuleBuilder() {
 
 function buildCriteriaFromRule(builder) {
   if (builder.mode === "time") {
-    const guardText = builder.guard === "not closed" ? " AND Etapa != Cerrado" : "";
-    return `${builder.timeBasis} >= ${builder.elapsed} AND Etapa = ${builder.stage}${guardText}`;
+    const parts = [`${builder.timeBasis} >= ${builder.elapsed}`, `Etapa = ${builder.stage}`];
+    const conditionCriteria = buildConditionCriteria(builder, { skipStageDuplicate: true });
+    if (conditionCriteria) parts.push(builder.match === "any" ? `(${conditionCriteria})` : conditionCriteria);
+    if (builder.guard === "not closed") parts.push("Etapa != Cerrado");
+    return parts.join(" AND ");
   }
 
-  if (builder.operator === "is empty" || builder.operator === "is not empty") {
-    return `${builder.field} ${builder.operator}`;
-  }
+  return buildConditionCriteria(builder);
+}
 
-  return `${builder.field} ${builder.operator} ${builder.value}`;
+function buildConditionCriteria(builder, options = {}) {
+  const joiner = builder.match === "any" ? " OR " : " AND ";
+  return normalizeRuleConditions(builder.conditions)
+    .filter((condition) => {
+      if (!options.skipStageDuplicate) return true;
+      return !(condition.field === "Etapa" && ["=", "changes to"].includes(condition.operator) && condition.value === builder.stage);
+    })
+    .map((condition) => {
+      if (condition.operator === "is empty" || condition.operator === "is not empty") {
+        return `${condition.field} ${condition.operator}`;
+      }
+
+      return `${condition.field} ${condition.operator} ${condition.value}`;
+    })
+    .join(joiner);
 }
 
 function applyRuleTemplate(template) {
@@ -1075,33 +1249,36 @@ function applyRuleTemplate(template) {
   const templates = {
     "stage-escalated": {
       mode: "field",
-      field: "Etapa",
-      operator: "changes to",
-      value: "Escalado / En Revision",
+      match: "all",
+      conditions: [{ field: "Etapa", operator: "changes to", value: "Escalado / En Revision" }],
     },
     "type-return": {
       mode: "field",
-      field: "Tipo de ticket",
-      operator: "=",
-      value: "Solicitud de devolucion",
+      match: "all",
+      conditions: [{ field: "Tipo de ticket", operator: "=", value: "Solicitud de devolucion" }],
     },
     "time-24-client": {
       mode: "time",
+      match: "all",
       timeBasis: "time in current stage",
       elapsed: "24 hours",
       stage: "En Espera / Por Cliente",
       guard: "not closed",
+      conditions: [{ field: "Etapa", operator: "=", value: "En Espera / Por Cliente" }],
     },
     "time-48-escalated": {
       mode: "time",
+      match: "all",
       timeBasis: "time since escalation",
       elapsed: "48 hours",
       stage: "Escalado / En Revision",
       guard: "not closed",
+      conditions: [{ field: "Etapa", operator: "=", value: "Escalado / En Revision" }],
     },
   };
 
   node.ruleBuilder = { ...getRuleBuilder(node), ...templates[template] };
+  syncLegacyRuleFields(node.ruleBuilder);
   node.criteria = buildCriteriaFromRule(node.ruleBuilder);
   if (node.ruleBuilder.mode === "time") node.sla = `After ${node.ruleBuilder.elapsed}`;
   markUnsaved();

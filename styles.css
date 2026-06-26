@@ -668,6 +668,88 @@ button {
   display: none;
 }
 
+.condition-builder {
+  display: grid;
+  gap: 8px;
+}
+
+.condition-builder.is-hidden {
+  display: none;
+}
+
+.condition-builder-note {
+  margin: -2px 0 0;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.condition-chip-list {
+  display: grid;
+  gap: 7px;
+}
+
+.condition-chip {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 28px;
+  gap: 6px;
+  align-items: center;
+  border: 1px solid #d7e2f2;
+  border-radius: 8px;
+  background: #fff;
+  padding: 7px;
+}
+
+.condition-chip-prefix {
+  border-radius: 999px;
+  background: var(--blue-soft);
+  color: var(--blue);
+  padding: 5px 0;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.condition-chip-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 1fr);
+  gap: 5px;
+}
+
+.condition-chip-fields input,
+.condition-chip-fields select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--subtle);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ink);
+  padding: 7px 8px;
+  font-size: 11px;
+  outline: 0;
+}
+
+.condition-remove {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: #fff0f0;
+  color: var(--red);
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.condition-remove:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.full-width-button {
+  width: 100%;
+  justify-content: center;
+}
+
 .mini-field {
   display: grid;
   gap: 4px;

@@ -7,9 +7,9 @@ The app helps business users visually plan CRM automations, document bilingual c
 ## Features
 
 - Folder-based automation organization.
-- Workflow canvas with draggable nodes.
+- Figma-style workflow canvas with draggable nodes.
 - Preset actions: trigger, condition, assign owner, move stage, create task, notify, wait, update field, webhook, and close ticket.
-- Guided rule builder for common `IF field equals value` and `IF time elapsed >= X` criteria.
+- Guided rule builder for common `IF field equals value`, multi-condition `AND/OR`, and `IF time elapsed >= X` criteria with guard conditions.
 - SLA presets for `Immediate`, `24 hours`, `48 hours`, and `72 hours`.
 - Bilingual handoff fields: Spanish client labels plus English/backend technical names.
 - Collapsible Step Spec panel.
@@ -61,6 +61,8 @@ No build step is required.
 - Click `+ New automation` to create a draft in the selected folder.
 - Click a node to edit its Spanish client label and English/backend developer spec.
 - Use the guided rule builder to create common field or time-elapsed criteria.
+- Use condition chips inside field rules to combine multiple field rules with `ALL / AND` or `ANY / OR`.
+- Use condition chips inside time rules as guard conditions, for example `time since escalation >= 48 hours AND Etapa = Escalado / En Revision AND Prioridad = High`.
 - Use SLA presets to avoid typing inconsistent timing values.
 - Drag nodes on the canvas to reorganize the flow.
 - Click `Save automation` to save the current draft into the selected folder and update the folder count.
